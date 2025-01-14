@@ -56,7 +56,7 @@ The project is containerized using Docker and uses Alembic for database migratio
    ```
 2. Initialize the database:
    ```sh
-   docker exec -it pipeline-metrics-collector-web-1 sh 
+   docker exec -it pipeline-metrics-collector_web_1 sh 
    flask db upgrade
    ```
 

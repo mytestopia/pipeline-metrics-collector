@@ -6,7 +6,6 @@ from flask import Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
-
 db = SQLAlchemy()
 
 
@@ -19,15 +18,25 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
 
-    from .models import Pipeline, Job, JobFailed, JobBuild
+    from .models import Pipeline, Job, JobFailed, JobBuild, ProjectJob
 
     def is_pipeline_stats_exist(session, pipeline_id):
         return bool(session.query(Pipeline).filter_by(pipeline_id=pipeline_id).first())
 
+    def diff_list(list_a: list, list_b: list) -> list:
+        # Using filter to find elements in a, but not in b
+        diff = list(filter(lambda x: x not in list_b, list_a))
+        return diff
+
+    def get_jobs_names_by_project(project_name: str) -> list[str]:
+        jobs_names_tuples = ProjectJob.query.with_entities(ProjectJob.job_name).filter_by(
+            project_name=project_name).all()
+        jobs_names = [job_name_tuple[0] for job_name_tuple in jobs_names_tuples]
+        return jobs_names
+
     @app.route("/save_metrics", methods=["POST"])
     def save_metrics():
         json_data = request.get_json()
-
         pipeline_id = json_data['pipeline_id']
         created_at = datetime.datetime.strptime(json_data['created_at'], "%Y-%m-%dT%H:%M:%S.%f%z")
 
@@ -81,6 +90,22 @@ def create_app():
                 db.session.add(metrics_job_failed)
 
             db.session.commit()
+
+            project_jobs = get_jobs_names_by_project(project_name=json_data['project'])
+            new_project_jobs = diff_list(json_data['all_e2e_jobs'], project_jobs)
+
+            for job_name in new_project_jobs:
+                new_project_job = ProjectJob(project_name=json_data['project'], job_name=job_name)
+                db.session.add(new_project_job)
+
+            old_project_jobs = diff_list(project_jobs, json_data['all_e2e_jobs'])
+            for old_job_name in old_project_jobs:
+                old_project_job = ProjectJob.query.filter_by(
+                    project_name=json_data['project'], job_name=old_job_name).first()
+                db.session.delete(old_project_job)
+
+            db.session.commit()
+
             return Response(status=HTTPStatus.OK)
 
         return Response(status=HTTPStatus.ALREADY_REPORTED)
