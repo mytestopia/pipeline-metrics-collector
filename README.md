@@ -39,7 +39,8 @@ The project is containerized using Docker and uses Alembic for database migratio
     "jobs_failed": [],
     "has_restarts": false,
     "project": "test/project",
-    "pipeline_id": 1
+    "pipeline_id": 1,
+    "all_e2e_jobs": ["coverage", "e2e"]
 }
 ```
 
