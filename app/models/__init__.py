@@ -3,3 +3,4 @@ from .job import Job
 from .job_failed import JobFailed
 from .job_build import JobBuild
 from .project_job import ProjectJob
+from .project_schedules import ProjectSchedule

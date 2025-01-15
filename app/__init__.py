@@ -18,21 +18,32 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
 
-    from .models import Pipeline, Job, JobFailed, JobBuild, ProjectJob
+    from .models import Pipeline, Job, JobFailed, JobBuild, ProjectJob, ProjectSchedule
 
     def is_pipeline_stats_exist(session, pipeline_id):
         return bool(session.query(Pipeline).filter_by(pipeline_id=pipeline_id).first())
 
-    def diff_list(list_a: list, list_b: list) -> list:
-        # Using filter to find elements in a, but not in b
-        diff = list(filter(lambda x: x not in list_b, list_a))
-        return diff
+    def save_new_project_jobs_to_db(json_data: dict):
+        ProjectJob.query.filter(ProjectJob.project_name == json_data['project']).delete()
 
-    def get_jobs_names_by_project(project_name: str) -> list[str]:
-        jobs_names_tuples = ProjectJob.query.with_entities(ProjectJob.job_name).filter_by(
-            project_name=project_name).all()
-        jobs_names = [job_name_tuple[0] for job_name_tuple in jobs_names_tuples]
-        return jobs_names
+        for job_name in json_data['all_e2e_jobs']:
+            new_project_job = ProjectJob(project_name=json_data['project'], job_name=job_name)
+            db.session.add(new_project_job)
+
+        db.session.commit()
+
+    def save_new_project_schedules_to_db(json_data: dict):
+        ProjectSchedule.query.filter(ProjectSchedule.project_name == json_data['project']).delete()
+
+        for schedule in json_data['schedules']:
+            new_project_job = ProjectSchedule(
+                schedule_name=schedule['name'],
+                project_name=json_data['project'],
+                is_active=schedule['is_active']
+            )
+            db.session.add(new_project_job)
+
+        db.session.commit()
 
     @app.route("/save_metrics", methods=["POST"])
     def save_metrics():
@@ -91,20 +102,8 @@ def create_app():
 
             db.session.commit()
 
-            project_jobs = get_jobs_names_by_project(project_name=json_data['project'])
-            new_project_jobs = diff_list(json_data['all_e2e_jobs'], project_jobs)
-
-            for job_name in new_project_jobs:
-                new_project_job = ProjectJob(project_name=json_data['project'], job_name=job_name)
-                db.session.add(new_project_job)
-
-            old_project_jobs = diff_list(project_jobs, json_data['all_e2e_jobs'])
-            for old_job_name in old_project_jobs:
-                old_project_job = ProjectJob.query.filter_by(
-                    project_name=json_data['project'], job_name=old_job_name).first()
-                db.session.delete(old_project_job)
-
-            db.session.commit()
+            save_new_project_jobs_to_db(json_data)
+            save_new_project_schedules_to_db(json_data)
 
             return Response(status=HTTPStatus.OK)
 
