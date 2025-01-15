@@ -40,7 +40,11 @@ The project is containerized using Docker and uses Alembic for database migratio
     "has_restarts": false,
     "project": "test/project",
     "pipeline_id": 1,
-    "all_e2e_jobs": ["coverage", "e2e"]
+    "all_e2e_jobs": ["coverage", "e2e"],
+    "schedules": [{
+       "name": "auto runs (00:00, 15:00)",
+       "is_active": true
+    }]
 }
 ```
 
