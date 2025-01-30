@@ -18,7 +18,7 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
 
-    from .models import Pipeline, Job, JobFailed, JobBuild, ProjectJob, ProjectSchedule
+    from .models import Pipeline, Job, JobFailed, JobBuild, ProjectJob, ProjectSchedule, ProjectPackage
 
     def is_pipeline_stats_exist(session, pipeline_id):
         return bool(session.query(Pipeline).filter_by(pipeline_id=pipeline_id).first())
@@ -42,6 +42,19 @@ def create_app():
                 is_active=schedule['is_active']
             )
             db.session.add(new_project_job)
+
+        db.session.commit()
+
+    def save_new_project_packages_to_db(json_data: dict):
+        ProjectPackage.query.filter(ProjectPackage.project_name == json_data['project']).delete()
+
+        for package, version in json_data['packages'].items():
+            new_project_package = ProjectPackage(
+                project_name=json_data['project'],
+                package_name=package,
+                version=version,
+            )
+            db.session.add(new_project_package)
 
         db.session.commit()
 
@@ -102,8 +115,14 @@ def create_app():
 
             db.session.commit()
 
-            save_new_project_jobs_to_db(json_data)
-            save_new_project_schedules_to_db(json_data)
+            if 'all_e2e_jobs' in json_data and json_data['all_e2e_jobs']:
+                save_new_project_jobs_to_db(json_data)
+
+            if 'schedules' in json_data and json_data['schedules']:
+                save_new_project_schedules_to_db(json_data)
+
+            if 'packages' in json_data and json_data['packages']:
+                save_new_project_packages_to_db(json_data)
 
             return Response(status=HTTPStatus.OK)
 
