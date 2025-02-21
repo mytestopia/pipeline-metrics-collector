@@ -1,10 +1,9 @@
-from http import HTTPStatus
 import datetime
-
 from flask import Flask, request
 from flask import Response
-from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+from http import HTTPStatus
 
 db = SQLAlchemy()
 
@@ -18,51 +17,122 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
 
-    from .models import Pipeline, Job, JobFailed, JobBuild, ProjectJob, ProjectSchedule, ProjectPackage
+    from .models import (Pipeline, Job, JobFailed, JobBuild, ProjectJob, ProjectSchedule, ProjectPackage,
+                         Project, Team, ProjectPriority, ProjectStatus)
 
     def is_pipeline_stats_exist(session, pipeline_id):
         return bool(session.query(Pipeline).filter_by(pipeline_id=pipeline_id).first())
 
-    def save_new_project_jobs_to_db(json_data: dict):
-        ProjectJob.query.filter(ProjectJob.project_name == json_data['project']).delete()
+    def save_items_to_db(model: db.Model, items_to_add: list, items_to_delete: list):
+        if not items_to_add and not items_to_delete:
+            return
 
-        for job_name in json_data['all_e2e_jobs']:
-            new_project_job = ProjectJob(project_name=json_data['project'], job_name=job_name)
-            db.session.add(new_project_job)
+        if items_to_delete:
+            db.session.bulk_delete_mappings(model, items_to_delete)
+
+        if items_to_add:
+            db.session.add_all(items_to_add)
 
         db.session.commit()
+
+    def save_new_project_jobs_to_db(json_data: dict):
+        jobs_in_db = ProjectJob.query.filter_by(project_id=json_data['project_id']).all()
+        job_names_in_db = [job.name for job in jobs_in_db]
+
+        jobs_to_delete = list()
+        for job in jobs_in_db:
+            if job.name not in json_data['all_e2e_jobs']:
+                jobs_to_delete.append(job)
+
+        jobs_to_add = list()
+        for job_name in json_data['all_e2e_jobs']:
+            if job_name not in job_names_in_db:
+                new_job = ProjectJob(name=job_name, project_id=json_data['project_id'])
+                jobs_to_add.append(new_job)
+
+        save_items_to_db(ProjectJob, jobs_to_add, jobs_to_delete)
 
     def save_new_project_schedules_to_db(json_data: dict):
-        ProjectSchedule.query.filter(ProjectSchedule.project_name == json_data['project']).delete()
+        schedules_in_db = ProjectSchedule.query.filter_by(project_id=json_data['project_id']).all()
+        new_schedule_names = [schedule['name'] for schedule in json_data['schedules']]
 
-        for schedule in json_data['schedules']:
-            new_project_job = ProjectSchedule(
-                schedule_name=schedule['name'],
-                project_name=json_data['project'],
-                is_active=schedule['is_active']
+        schedules_to_delete = list()
+        for schedule in schedules_in_db:
+            if schedule.name not in new_schedule_names:
+                schedules_to_delete.append(schedule)
+
+        schedules_to_add = list()
+        for new_schedule in json_data['schedules']:
+            for schedule_in_db in schedules_in_db:
+                if new_schedule['name'] == schedule_in_db.name:
+                    if new_schedule['is_active'] != schedule_in_db.is_active:
+                        schedule_in_db.is_active = new_schedule['is_active']
+                    break
+
+            schedules_to_add.append(
+                ProjectSchedule(
+                    name=new_schedule['name'],
+                    is_active=new_schedule['is_active'],
+                    project_id=json_data['project_id']
+                )
             )
-            db.session.add(new_project_job)
 
-        db.session.commit()
+        save_items_to_db(ProjectSchedule, schedules_to_add, schedules_to_delete)
 
     def save_new_project_packages_to_db(json_data: dict):
-        ProjectPackage.query.filter(ProjectPackage.project_name == json_data['project']).delete()
+        packages_in_db = ProjectPackage.query.filter_by(project_id=json_data['project_id']).all()
+        new_package_names = [package for package, _ in json_data['packages']]
 
-        for package, version in json_data['packages'].items():
-            new_project_package = ProjectPackage(
-                project_name=json_data['project'],
-                package_name=package,
-                version=version,
+        packages_to_delete = list()
+        for package in packages_in_db:
+            if package.name not in new_package_names:
+                packages_to_delete.append(package)
+
+        packages_to_add = list()
+        for new_package, new_version in json_data['packages']:
+            for package_in_db in packages_in_db:
+                if new_package == package_in_db.name:
+                    if new_version != package_in_db.version:
+                        package_in_db.version = new_version
+                    break
+
+            packages_to_add.append(
+                ProjectPackage(
+                    name=new_package,
+                    version=version,
+                    project_id=json_data['project_id']
+                )
             )
-            db.session.add(new_project_package)
 
-        db.session.commit()
+        save_items_to_db(ProjectPackage, packages_to_add, packages_to_delete)
+
+    def save_new_team_to_db(json_data: dict):
+        team = Team.query.filter(Team.name == json_data['team']).first()
+        if not team:
+            new_team = Team(name=json_data['team'])
+            db.session.add(new_team)
+            db.session.commit()
+
+    def save_new_project_to_db(json_data: dict):
+        project = db.session.get(Project, json_data['project_id'])
+        if not project:
+            team = Team.query.filter(Team.name == json_data['team']).first()
+            new_project = Project(
+                id=json_data['project_id'],
+                name=json_data['project_name'],
+                status=ProjectStatus.ACTIVE,
+                priority=ProjectPriority.P0,
+                team_id=team.id
+            )
+            db.session.add(new_project)
+            db.session.commit()
 
     @app.route("/save_metrics", methods=["POST"])
     def save_metrics():
         json_data = request.get_json()
         pipeline_id = json_data['pipeline_id']
         created_at = datetime.datetime.strptime(json_data['created_at'], "%Y-%m-%dT%H:%M:%S.%f%z")
+        project = Project.query.filter(Project.name == json_data['project']).first()
 
         if not is_pipeline_stats_exist(db.session, pipeline_id):
             metrics_pipeline = Pipeline(
@@ -72,7 +142,8 @@ def create_app():
                 duration_e2e=json_data['duration_e2e'],
                 created_at=created_at,
                 ref=json_data['ref'],
-                has_restarts=json_data['has_restarts']
+                has_restarts=json_data['has_restarts'],
+                project_id=project.id if project else None
             )
             db.session.add(metrics_pipeline)
 
@@ -115,17 +186,36 @@ def create_app():
 
             db.session.commit()
 
-            if 'all_e2e_jobs' in json_data and json_data['all_e2e_jobs']:
-                save_new_project_jobs_to_db(json_data)
-
-            if 'schedules' in json_data and json_data['schedules']:
-                save_new_project_schedules_to_db(json_data)
-
-            if 'packages' in json_data and json_data['packages']:
-                save_new_project_packages_to_db(json_data)
-
             return Response(status=HTTPStatus.OK)
 
         return Response(status=HTTPStatus.ALREADY_REPORTED)
+
+    @app.route("/save_project_info", methods=["POST"])
+    def save_project_info():
+        json_data = request.get_json()
+
+        if 'team' not in json_data or not json_data['team']:
+            return Response(status=HTTPStatus.BAD_REQUEST,
+                            response="Field 'team' is required")
+
+        save_new_team_to_db(json_data)
+
+        if ('project_id' not in json_data or not json_data['project_id'] or
+                'project_name' not in json_data or not json_data['project_name']):
+            return Response(status=HTTPStatus.BAD_REQUEST,
+                            response="Fields 'project_id' and 'project_name' are required")
+
+        save_new_project_to_db(json_data)
+
+        if 'all_e2e_jobs' in json_data and json_data['all_e2e_jobs']:
+            save_new_project_jobs_to_db(json_data)
+
+        if 'schedules' in json_data and json_data['schedules']:
+            save_new_project_schedules_to_db(json_data)
+
+        if 'packages' in json_data and json_data['packages']:
+            save_new_project_packages_to_db(json_data)
+
+        return Response(status=HTTPStatus.OK)
 
     return app

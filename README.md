@@ -39,7 +39,27 @@ The project is containerized using Docker and uses Alembic for database migratio
     "jobs_failed": [],
     "has_restarts": false,
     "project": "test/project",
-    "pipeline_id": 1,
+    "pipeline_id": 1
+}
+```
+
+**Response:**
+- **Status Code:** `200 OK` if metrics are saved successfully.
+- **Status Code:** `208 Already Reported` if the pipeline metrics already exist.
+
+
+**URL:** `/save_project_info`  
+**Method:** `POST`  
+**Content-Type:** `application/json`  
+**Description:** This endpoint is used to save project info.
+
+
+**Request Body Example:**
+```json
+{
+    "team": "team_name",
+    "project_id": 0,
+    "project_name": "test/project",
     "all_e2e_jobs": ["coverage", "e2e"], 
     "schedules": [{  
        "name": "auto runs (00:00, 15:00)",
@@ -54,8 +74,7 @@ The project is containerized using Docker and uses Alembic for database migratio
 ```
 
 **Response:**
-- **Status Code:** `200 OK` if metrics are saved successfully.
-- **Status Code:** `208 Already Reported` if the pipeline metrics already exist.
+- **Status Code:** `200 OK` if project info are saved successfully.
 
 
 ## Running & Updating

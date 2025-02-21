@@ -5,15 +5,15 @@ class ProjectSchedule(db.Model):
     __tablename__ = 'project_schedule'
 
     id = db.Column(db.Integer, primary_key=True)
-    schedule_name = db.Column(db.String)
-    project_name = db.Column(db.String)
-    is_active = db.Column(db.Boolean)
+    name = db.Column(db.String, nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False)
+    project_id = db.Column("project_id", db.ForeignKey("project.id"), nullable=False)
 
-    def __init__(self, schedule_name, project_name, is_active):
-        self.schedule_name = schedule_name
-        self.project_name = project_name
+    def __init__(self, name, is_active, project_id):
+        self.name = name
         self.is_active = is_active
+        self.project_id = project_id
 
     def __repr__(self):
-        return (f'ProjectSchedule <id={self.id}, schedule_name={self.schedule_name}, project={self.project_name}, '
-                f'is_active={self.is_active}>')
+        return (f'ProjectSchedule <id={self.id}, name={self.name}, is_active={self.is_active}'
+                f'project_id={self.project_id}>')
