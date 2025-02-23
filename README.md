@@ -75,6 +75,7 @@ The project is containerized using Docker and uses Alembic for database migratio
 
 **Response:**
 - **Status Code:** `200 OK` if project info are saved successfully.
+- **Status Code:** `400 OK` if request body does not contain required fields.
 
 
 ## Running & Updating

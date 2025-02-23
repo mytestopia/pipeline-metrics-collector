@@ -24,16 +24,15 @@ def create_app():
         return bool(session.query(Pipeline).filter_by(pipeline_id=pipeline_id).first())
 
     def save_items_to_db(model: db.Model, items_to_add: list, items_to_delete: list):
-        if not items_to_add and not items_to_delete:
-            return
-
         if items_to_delete:
-            db.session.bulk_delete_mappings(model, items_to_delete)
+            ids = [item.id for item in items_to_delete]
+            db.session.query(model).filter(model.id.in_(ids)).delete()
 
         if items_to_add:
             db.session.add_all(items_to_add)
 
-        db.session.commit()
+        if items_to_add or items_to_delete:
+            db.session.commit()
 
     def save_new_project_jobs_to_db(json_data: dict):
         jobs_in_db = ProjectJob.query.filter_by(project_id=json_data['project_id']).all()
@@ -62,26 +61,31 @@ def create_app():
                 schedules_to_delete.append(schedule)
 
         schedules_to_add = list()
+        is_existing_in_db = False
+
         for new_schedule in json_data['schedules']:
             for schedule_in_db in schedules_in_db:
-                if new_schedule['name'] == schedule_in_db.name:
+                is_existing_in_db = new_schedule['name'] == schedule_in_db.name
+                if is_existing_in_db:
                     if new_schedule['is_active'] != schedule_in_db.is_active:
                         schedule_in_db.is_active = new_schedule['is_active']
+                        db.session.commit()
                     break
 
-            schedules_to_add.append(
-                ProjectSchedule(
-                    name=new_schedule['name'],
-                    is_active=new_schedule['is_active'],
-                    project_id=json_data['project_id']
+            if not is_existing_in_db:
+                schedules_to_add.append(
+                    ProjectSchedule(
+                        name=new_schedule['name'],
+                        is_active=new_schedule['is_active'],
+                        project_id=json_data['project_id']
+                    )
                 )
-            )
 
         save_items_to_db(ProjectSchedule, schedules_to_add, schedules_to_delete)
 
     def save_new_project_packages_to_db(json_data: dict):
         packages_in_db = ProjectPackage.query.filter_by(project_id=json_data['project_id']).all()
-        new_package_names = [package for package, _ in json_data['packages']]
+        new_package_names = [package for package, _ in json_data['packages'].items()]
 
         packages_to_delete = list()
         for package in packages_in_db:
@@ -89,20 +93,25 @@ def create_app():
                 packages_to_delete.append(package)
 
         packages_to_add = list()
-        for new_package, new_version in json_data['packages']:
+        is_existing_in_db = False
+
+        for new_package, new_version in json_data['packages'].items():
             for package_in_db in packages_in_db:
-                if new_package == package_in_db.name:
+                is_existing_in_db = new_package == package_in_db.name
+                if is_existing_in_db:
                     if new_version != package_in_db.version:
                         package_in_db.version = new_version
+                        db.session.commit()
                     break
 
-            packages_to_add.append(
-                ProjectPackage(
-                    name=new_package,
-                    version=version,
-                    project_id=json_data['project_id']
+            if not is_existing_in_db:
+                packages_to_add.append(
+                    ProjectPackage(
+                        name=new_package,
+                        version=new_version,
+                        project_id=json_data['project_id']
+                    )
                 )
-            )
 
         save_items_to_db(ProjectPackage, packages_to_add, packages_to_delete)
 
@@ -132,7 +141,12 @@ def create_app():
         json_data = request.get_json()
         pipeline_id = json_data['pipeline_id']
         created_at = datetime.datetime.strptime(json_data['created_at'], "%Y-%m-%dT%H:%M:%S.%f%z")
-        project = Project.query.filter(Project.name == json_data['project']).first()
+
+        if json_data['project_id']:
+            project_id = json_data['project_id']
+        else:
+            project = Project.query.filter(Project.name == json_data['project']).first()
+            project_id = project.id if project else None
 
         if not is_pipeline_stats_exist(db.session, pipeline_id):
             metrics_pipeline = Pipeline(
@@ -143,7 +157,7 @@ def create_app():
                 created_at=created_at,
                 ref=json_data['ref'],
                 has_restarts=json_data['has_restarts'],
-                project_id=project.id if project else None
+                project_id=project_id
             )
             db.session.add(metrics_pipeline)
 
