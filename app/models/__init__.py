@@ -2,3 +2,8 @@ from .pipeline import Pipeline
 from .job import Job
 from .job_failed import JobFailed
 from .job_build import JobBuild
+from .project_job import ProjectJob
+from .project_schedule import ProjectSchedule
+from .project_package import ProjectPackage
+from .project import Project, ProjectPriority, ProjectStatus
+from .team import Team

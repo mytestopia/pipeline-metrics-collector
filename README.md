@@ -48,6 +48,36 @@ The project is containerized using Docker and uses Alembic for database migratio
 - **Status Code:** `208 Already Reported` if the pipeline metrics already exist.
 
 
+**URL:** `/save_project_info`  
+**Method:** `POST`  
+**Content-Type:** `application/json`  
+**Description:** This endpoint is used to save project info.
+
+
+**Request Body Example:**
+```json
+{
+    "team": "team_name",
+    "project_id": 0,
+    "project_name": "test/project",
+    "all_e2e_jobs": ["coverage", "e2e"], 
+    "schedules": [{  
+       "name": "auto runs (00:00, 15:00)",
+       "is_active": true
+    }],
+   "packages": {
+        "allure-utils": "v0.1.0",
+        "asyncpg": "0.24.0",
+        "autoflake": "2.2.0"
+    }
+}
+```
+
+**Response:**
+- **Status Code:** `200 OK` if project info are saved successfully.
+- **Status Code:** `400 OK` if request body does not contain required fields.
+
+
 ## Running & Updating
 
 1. Build and start the containers:
@@ -73,7 +103,7 @@ The project is containerized using Docker and uses Alembic for database migratio
    ```
 3. Create and apply a new migration
    ```shell
-    docker exec -it pipeline-metrics-collector_web_1 sh
+    docker exec -it pipeline-metrics-collector-web-1 sh
     flask db migrate -m 'migration'
     flask db upgrade <revision>
    ```

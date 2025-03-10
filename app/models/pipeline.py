@@ -13,8 +13,10 @@ class Pipeline(db.Model):
     created_at = db.Column(DateTime)
     is_master = db.Column(Boolean)
     has_restarts = db.Column(Boolean)
+    project_id = db.Column("project_id", db.ForeignKey("project.id"), nullable=True)
 
-    def __init__(self, pipeline_id, project, duration, duration_e2e, created_at, ref, has_restarts):
+    def __init__(self, pipeline_id, project, duration, duration_e2e, created_at, ref, has_restarts,
+                 project_id):
         self.pipeline_id = pipeline_id
         self.project = project
         self.duration = duration
@@ -22,6 +24,7 @@ class Pipeline(db.Model):
         self.created_at = created_at
         self.is_master = True if ref == 'master' else False
         self.has_restarts = has_restarts
+        self.project_id = project_id
 
     def __repr__(self):
         return '<id {}, pipeline_id {}>'.format(self.id)
