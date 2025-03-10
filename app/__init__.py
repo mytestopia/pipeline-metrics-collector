@@ -142,7 +142,7 @@ def create_app():
         pipeline_id = json_data['pipeline_id']
         created_at = datetime.datetime.strptime(json_data['created_at'], "%Y-%m-%dT%H:%M:%S.%f%z")
 
-        if json_data['project_id']:
+        if 'project_id' in json_data and json_data['project_id']:
             project_id = json_data['project_id']
         else:
             project = Project.query.filter(Project.name == json_data['project']).first()
