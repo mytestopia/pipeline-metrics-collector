@@ -142,11 +142,11 @@ def create_app():
         pipeline_id = json_data['pipeline_id']
         created_at = datetime.datetime.strptime(json_data['created_at'], "%Y-%m-%dT%H:%M:%S.%f%z")
 
+        project = None
         if 'project_id' in json_data and json_data['project_id']:
-            project_id = json_data['project_id']
-        else:
+            project = Project.query.filter(Project.id == json_data['project_id']).first()
+        elif 'project' in json_data and json_data['project']:
             project = Project.query.filter(Project.name == json_data['project']).first()
-            project_id = project.id if project else None
 
         if not is_pipeline_stats_exist(db.session, pipeline_id):
             metrics_pipeline = Pipeline(
@@ -157,7 +157,7 @@ def create_app():
                 created_at=created_at,
                 ref=json_data['ref'],
                 has_restarts=json_data['has_restarts'],
-                project_id=project_id
+                project_id=project.id if project else None
             )
             db.session.add(metrics_pipeline)
 
