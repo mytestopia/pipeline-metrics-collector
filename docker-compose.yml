@@ -3,7 +3,10 @@ services:
     web:
         build: .
         ports:
-            - "5000:5000"
+            - "${PORT:-5002}:${PORT:-5002}"
+        environment:
+          - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg2://e2e:e2e@db/e2e2}
+          - PORT=${PORT:-5002}
         volumes:
             - ./app:/app
             - ./migrations:/migrations

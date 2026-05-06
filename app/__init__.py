@@ -1,21 +1,50 @@
 import datetime
+import logging
+import os
+
 from flask import Flask, request
 from flask import Response
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from http import HTTPStatus
+from pythonjsonlogger import jsonlogger
 
 db = SQLAlchemy()
+
+
+def setup_json_logging(app):
+    handler = logging.StreamHandler()
+    formatter = jsonlogger.JsonFormatter(
+        fmt="%(asctime)s %(levelname)s %(message)s",
+        rename_fields={"asctime": "timestamp", "levelname": "log_level"}
+    )
+    handler.setFormatter(formatter)
+
+    app.logger.handlers.clear()
+    app.logger.addHandler(handler)
+    app.logger.setLevel(logging.INFO)
+
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 
 def create_app():
     app = Flask(__name__)
 
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://e2e:e2e@db/e2e'
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    setup_json_logging(app)
 
     db.init_app(app)
     Migrate(app, db)
+
+    @app.after_request
+    def log_request(response):
+        app.logger.info(
+            "%s %s %s", request.method, request.path, response.status_code,
+            extra={"remote_addr": request.remote_addr}
+        )
+        return response
 
     from .models import (Pipeline, Job, JobFailed, JobBuild, ProjectJob, ProjectSchedule, ProjectPackage,
                          Project, Team, ProjectPriority, ProjectStatus)
@@ -139,7 +168,15 @@ def create_app():
     @app.route("/save_metrics", methods=["POST"])
     def save_metrics():
         json_data = request.get_json()
-        pipeline_id = json_data['pipeline_id']
+        if not json_data:
+            app.logger.warning("save_metrics called with empty or invalid JSON body")
+            return {"error": "Request body must be valid JSON"}, 400
+
+
+        pipeline_id = json_data.get('pipeline_id')
+        if not pipeline_id:
+            return {"error": "Request body must contain pipeline_id"}, 400
+
         created_at = datetime.datetime.strptime(json_data['created_at'], "%Y-%m-%dT%H:%M:%S.%f%z")
 
         project = None
@@ -231,5 +268,9 @@ def create_app():
             save_new_project_packages_to_db(json_data)
 
         return Response(status=HTTPStatus.OK)
+
+    @app.route("/health", methods=["GET"])
+    def health():
+        return {"status": "ok"}, HTTPStatus.OK
 
     return app
