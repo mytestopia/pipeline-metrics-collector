@@ -7,3 +7,4 @@ from .project_schedule import ProjectSchedule
 from .project_package import ProjectPackage
 from .project import Project, ProjectPriority, ProjectStatus
 from .team import Team
+from .job_runner import JobRunner
